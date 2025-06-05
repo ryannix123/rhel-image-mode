@@ -1,0 +1,115 @@
+---
+- name: Simple RHEL Image Mode Demo
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Create resource group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: imagemode-demo
+        location: eastus
+
+    - name: Generate SSH key
+      openssh_keypair:
+        path: ~/.ssh/demo-key
+        force: false
+
+    - name: Create container builder VM
+      azure.azcollection.azure_rm_virtualmachine:
+        resource_group: imagemode-demo
+        name: builder
+        vm_size: Standard_D2s_v3
+        admin_username: core
+        ssh_password_enabled: false
+        ssh_public_keys:
+          - path: /home/core/.ssh/authorized_keys
+            key_data: "{{ lookup('file', '~/.ssh/demo-key.pub') }}"
+        image:
+          publisher: RedHat
+          offer: rhel-raw
+          sku: "9_5"
+          version: latest
+      register: builder_vm
+
+    - name: Create demo VM
+      azure.azcollection.azure_rm_virtualmachine:
+        resource_group: imagemode-demo
+        name: demo
+        vm_size: Standard_D2s_v3
+        admin_username: core
+        ssh_password_enabled: false
+        ssh_public_keys:
+          - path: /home/core/.ssh/authorized_keys
+            key_data: "{{ lookup('file', '~/.ssh/demo-key.pub') }}"
+        image:
+          publisher: RedHat
+          offer: rhel-raw
+          sku: "9_5"
+          version: latest
+      register: demo_vm
+
+    - name: Get VM IPs
+      azure.azcollection.azure_rm_publicipaddress_info:
+        resource_group: imagemode-demo
+        name: "{{ item }}"
+      register: vm_ips
+      loop: [builder, demo]
+
+    - name: Wait for VMs
+      wait_for:
+        host: "{{ item.publicipaddresses[0].ip_address }}"
+        port: 22
+        timeout: 300
+      loop: "{{ vm_ips.results }}"
+
+    - name: Show next steps
+      debug:
+        msg: |
+          ===============================================
+          VMs Created! Now follow these manual steps:
+          ===============================================
+          
+          Builder VM: {{ vm_ips.results[0].publicipaddresses[0].ip_address }}
+          Demo VM:    {{ vm_ips.results[1].publicipaddresses[0].ip_address }}
+          
+          SSH Key: ~/.ssh/demo-key
+          
+          NEXT STEPS:
+          
+          1. SSH to builder VM:
+             ssh -i ~/.ssh/demo-key core@{{ vm_ips.results[0].publicipaddresses[0].ip_address }}
+          
+          2. On builder VM, run these commands:
+             sudo dnf install -y podman git
+             git clone https://github.com/mrguitar/rhel-mssql-bootc
+             cd rhel-mssql-bootc
+             
+          3. Login to Quay.io:
+             podman login quay.io
+             (Use your Quay.io username/password)
+          
+          4. Build and push image (replace YOUR_USERNAME):
+             podman build --build-arg "sshpubkey=$(cat ~/.ssh/authorized_keys)" \
+               -f Containerfile.azure \
+               -t quay.io/YOUR_USERNAME/mssql-image-mode:azure
+             podman push quay.io/YOUR_USERNAME/mssql-image-mode:azure
+          
+          5. SSH to demo VM:
+             ssh -i ~/.ssh/demo-key core@{{ vm_ips.results[1].publicipaddresses[0].ip_address }}
+          
+          6. On demo VM, convert to Image Mode:
+             sudo dnf install -y podman
+             sudo podman run --privileged --pid=host \
+               -v /var/lib/containers:/var/lib/containers \
+               -v /:/target \
+               -v /home/core/.ssh/authorized_keys:/bootc_authorized_ssh_keys/root \
+               quay.io/YOUR_USERNAME/mssql-image-mode:azure \
+               bootc install to-existing-root --acknowledge-destructive \
+               --root-ssh-authorized-keys /bootc_authorized_ssh_keys/root
+             sudo reboot
+          
+          7. After reboot, test immutability:
+             sudo touch /opt/test.txt
+             (Should fail with "Read-only file system")
+          
+          When done, run: ansible-playbook cleanup.yml

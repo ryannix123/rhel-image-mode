@@ -1,0 +1,31 @@
+---
+- name: Cleanup Demo Resources
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Confirm cleanup
+      pause:
+        prompt: "Delete all demo resources? (yes/no)"
+      register: confirm
+
+    - name: Delete resource group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: imagemode-demo
+        state: absent
+        force_delete_nonempty: true
+      when: confirm.user_input == "yes"
+
+    - name: Remove SSH key
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - ~/.ssh/demo-key
+        - ~/.ssh/demo-key.pub
+      when: confirm.user_input == "yes"
+
+    - name: Done
+      debug:
+        msg: "Demo cleanup complete!"
+      when: confirm.user_input == "yes"
