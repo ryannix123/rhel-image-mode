@@ -57,12 +57,6 @@ chmod +x verify.sh
 ansible-playbook cleanup.yml
 ```
 
-## Customer Success Stories
-
-*"We reduced our patch windows from 6 hours to 30 minutes and eliminated 90% of our configuration drift issues."* - Fortune 500 Financial Services
-
-*"Image Mode lets us deploy the same secure configuration to 5,000 edge devices simultaneously."* - Global Manufacturing Company
-
 ## Key Demo Points for Your Customer
 
 ### 1. **Immutability in Action**
