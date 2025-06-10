@@ -45,7 +45,7 @@ Your infrastructure is probably stuck in the old way of doing things: logging in
 
 ```bash
 # 1. Run the demo
-ansible-playbook demo.yml
+ansible-playbook rhel_image_mode_ansible.yaml
 
 # 2. Follow the manual steps shown in output
 
@@ -62,7 +62,7 @@ ansible-playbook cleanup.yml
 ### 1. **Immutability in Action**
 ```bash
 sudo touch /opt/test.txt
-# Result: "Read-only file system" - OS can't be tampered with
+# Result: "Read-only file system" - Can't tamper with the OS!
 ```
 
 ### 2. **Atomic Updates**
